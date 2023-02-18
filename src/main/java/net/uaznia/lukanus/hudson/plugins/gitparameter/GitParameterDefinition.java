@@ -352,10 +352,20 @@ public class GitParameterDefinition extends ParameterDefinition implements Compa
 
     private Set<String> getTag(GitClient gitClient, String gitUrl) throws InterruptedException {
         Set<String> tagSet = new HashSet<>();
+        Pattern tagFilterPattern = compileTagFilterPattern();
+
         try {
+XXX            TODO if tagFilter looks like regex expression, then change to '*'
             Map<String, ObjectId> tags = gitClient.getRemoteReferences(gitUrl, tagFilter, false, true);
-            for (String tagName : tags.keySet()) {
-                tagSet.add(tagName.replaceFirst(REFS_TAGS_PATTERN, ""));
+            for (String _tagName : tags.keySet()) {
+		String tagName = _tagName.replaceFirst(REFS_TAGS_PATTERN, "");
+                Matcher matcher = tagFilterPattern.matcher(tagName);
+                tagSet.add(
+                if (matcher.matches())
+                    if (matcher.groupCount() == 1)
+                        tagSet.add(matcher.group(1));
+                    else
+                        tagSet.add(tagName);
             }
         } catch (GitException e) {
             LOGGER.log(Level.WARNING, getCustomJobName() + " " + Messages.GitParameterDefinition_getTag(), e);
@@ -366,19 +376,24 @@ public class GitParameterDefinition extends ParameterDefinition implements Compa
     private Set<String> getBranch(GitClient gitClient, String gitUrl, String remoteName) throws Exception {
         Set<String> branchSet = new HashSet<>();
         Pattern branchFilterPattern = compileBranchFilterPattern();
+        try {
 
-        Map<String, ObjectId> branches = gitClient.getRemoteReferences(gitUrl, null, true, false);
-        Iterator<String> remoteBranchesName = branches.keySet().iterator();
-        while (remoteBranchesName.hasNext()) {
-            String branchName = strip(remoteBranchesName.next(), remoteName);
-            Matcher matcher = branchFilterPattern.matcher(branchName);
-            if (matcher.matches()) {
-                if (matcher.groupCount() == 1) {
-                    branchSet.add(matcher.group(1));
-                } else {
-                    branchSet.add(branchName);
+            Map<String, ObjectId> branches = gitClient.getRemoteReferences(gitUrl, null, true, false);
+            Iterator<String> remoteBranchesName = branches.keySet().iterator();
+            while (remoteBranchesName.hasNext()) {
+                String branchName = strip(remoteBranchesName.next(), remoteName);
+                Matcher matcher = branchFilterPattern.matcher(branchName);
+                if (matcher.matches()) {
+                    if (matcher.groupCount() == 1) {
+                        branchSet.add(matcher.group(1));
+                    } else {
+                        branchSet.add(branchName);
+                    }
                 }
             }
+        } catch (GitException e) {
+XXX
+            LOGGER.log(Level.WARNING, getCustomJobName() + " " + Messages.GitParameterDefinition_getBranch(), e);
         }
         return branchSet;
     }
@@ -395,15 +410,28 @@ public class GitParameterDefinition extends ParameterDefinition implements Compa
         return pullRequestSet;
     }
 
-    private Pattern compileBranchFilterPattern() {
+    private Pattern compileBranchFilterPattern() throws PatternSyntaxException {
         Pattern branchFilterPattern;
         try {
             branchFilterPattern = Pattern.compile(branchFilter);
-        } catch (Exception e) {
+        } catch (PatternSyntaxException e) {
             LOGGER.log(Level.INFO, getCustomJobName() + " " + Messages.GitParameterDefinition_branchFilterNotValid(), e.getMessage());
             branchFilterPattern = Pattern.compile(".*");
+            throw e;
         }
         return branchFilterPattern;
+    }
+
+    private Pattern compileTagFilterPattern() throws PatternSyntaxException {
+        Pattern tagFilterPattern;
+        try {
+            tagFilterPattern = Pattern.compile(tagFilter);
+        } catch (PatternSyntaxException e) {
+            LOGGER.log(Level.INFO, getCustomJobName() + " " + Messages.GitParameterDefinition_tagFilterNotValid(), e.getMessage());
+            tagFilterPattern = Pattern.compile(".*");
+            throw e;
+        }
+        return tagFilterPattern;
     }
 
     //hudson.plugins.git.Branch.strip
